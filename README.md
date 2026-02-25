@@ -18,10 +18,11 @@ import { createLiquidGlass } from "liquid-glass-js";
 const container = document.getElementById("glass");
 
 const instance = createLiquidGlass(container, {
-  cylinder: {
-    radiusTop: 0.14,
-    radiusBottom: 0.14,
-    height: 1.0,
+  capsule: {
+    radius: 0.12,
+    height: 0.72,
+    capSegments: 18,
+    radialSegments: 64,
   },
   material: {
     ior: 1.45,
@@ -57,11 +58,13 @@ Returns:
 - `dpr: [min, max] | number`
 - `bgColor: string`
 - `bgOpacity: number`
-- `cylinder`: geometry values (`radiusTop`, `radiusBottom`, `height`, `radialSegments`, ...)
+- `capsule`: geometry values (`radius`, `height`, `capSegments`, `radialSegments`)
 - `material`: physical glass material values (`transmission`, `ior`, `thickness`, `reflectivity`, ...)
 - `background`:
   - `{ type: "gradient" }` (default)
   - `{ type: "image", imageUrl: string }`
+
+`cylinder` options from older versions are still accepted for backward compatibility.
 
 ## Local demo
 
