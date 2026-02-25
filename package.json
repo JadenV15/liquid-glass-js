@@ -1,0 +1,27 @@
+{
+  "name": "liquid-glass-js",
+  "version": "0.1.0",
+  "description": "Minimal JS library that mounts a static liquid-glass cylinder into a div container.",
+  "type": "module",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "check": "node --check src/index.js",
+    "demo": "python3 -m http.server 4173"
+  },
+  "keywords": [
+    "threejs",
+    "glass",
+    "liquid-glass",
+    "cylinder",
+    "webgl"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.180.0"
+  }
+}
