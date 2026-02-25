@@ -5,13 +5,11 @@ const DEFAULT_OPTIONS = {
   dpr: [1, 2],
   bgColor: "#0e0f12",
   bgOpacity: 1,
-  cylinder: {
-    radiusTop: 0.13,
-    radiusBottom: 0.13,
+  capsule: {
+    radius: 0.13,
     height: 0.9,
-    radialSegments: 96,
-    heightSegments: 1,
-    openEnded: true,
+    capSegments: 16,
+    radialSegments: 64,
   },
   material: {
     color: "#ffffff",
@@ -95,12 +93,36 @@ function toPixelRatio(value) {
   return value;
 }
 
+function normalizeCapsuleOptions(config) {
+  if (config.capsule) return config;
+
+  // Backward compatibility with earlier cylinder option shape.
+  if (config.cylinder) {
+    const radius = config.cylinder.radiusTop ?? config.cylinder.radiusBottom ?? 0.13;
+    return {
+      ...config,
+      capsule: {
+        ...DEFAULT_OPTIONS.capsule,
+        radius,
+        height: config.cylinder.height ?? DEFAULT_OPTIONS.capsule.height,
+        radialSegments: config.cylinder.radialSegments ?? DEFAULT_OPTIONS.capsule.radialSegments,
+      },
+    };
+  }
+
+  return {
+    ...config,
+    capsule: { ...DEFAULT_OPTIONS.capsule },
+  };
+}
+
 export function createLiquidGlass(container, options = {}) {
   if (!(container instanceof HTMLElement)) {
     throw new Error("createLiquidGlass(container, options): container must be an HTMLElement.");
   }
 
-  const config = deepMerge(DEFAULT_OPTIONS, options);
+  const merged = deepMerge(DEFAULT_OPTIONS, options);
+  const config = normalizeCapsuleOptions(merged);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(toPixelRatio(config.dpr));
@@ -134,15 +156,6 @@ export function createLiquidGlass(container, options = {}) {
   backgroundPlane.position.set(0, 0, -0.8);
   scene.add(backgroundPlane);
 
-  const tubeGeometry = new THREE.CylinderGeometry(
-    config.cylinder.radiusTop,
-    config.cylinder.radiusBottom,
-    config.cylinder.height,
-    config.cylinder.radialSegments,
-    config.cylinder.heightSegments,
-    config.cylinder.openEnded
-  );
-
   const glassMaterial = new THREE.MeshPhysicalMaterial({
     color: config.material.color,
     roughness: config.material.roughness,
@@ -158,27 +171,21 @@ export function createLiquidGlass(container, options = {}) {
     iridescenceThicknessRange: config.material.iridescenceThicknessRange,
     attenuationColor: config.material.attenuationColor,
     attenuationDistance: config.material.attenuationDistance,
-    side: THREE.DoubleSide,
   });
 
-  const tube = new THREE.Mesh(tubeGeometry, glassMaterial);
-  scene.add(tube);
+  const capsuleRadius = Math.max(0.001, config.capsule.radius);
+  const capsuleHeight = Math.max(capsuleRadius * 2.01, config.capsule.height);
+  const capsuleLength = Math.max(0.001, capsuleHeight - capsuleRadius * 2);
 
-  const capTop = new THREE.Mesh(
-    new THREE.CircleGeometry(config.cylinder.radiusTop, config.cylinder.radialSegments),
-    glassMaterial
+  const capsuleGeometry = new THREE.CapsuleGeometry(
+    capsuleRadius,
+    capsuleLength,
+    config.capsule.capSegments,
+    config.capsule.radialSegments
   );
-  capTop.position.y = config.cylinder.height / 2;
-  capTop.rotation.x = -Math.PI / 2;
-  scene.add(capTop);
 
-  const capBottom = new THREE.Mesh(
-    new THREE.CircleGeometry(config.cylinder.radiusBottom, config.cylinder.radialSegments),
-    glassMaterial
-  );
-  capBottom.position.y = -config.cylinder.height / 2;
-  capBottom.rotation.x = Math.PI / 2;
-  scene.add(capBottom);
+  const capsule = new THREE.Mesh(capsuleGeometry, glassMaterial);
+  scene.add(capsule);
 
   let bgTexture = null;
 
@@ -229,9 +236,7 @@ export function createLiquidGlass(container, options = {}) {
       resizeObserver.disconnect();
 
       if (bgTexture) bgTexture.dispose();
-      tubeGeometry.dispose();
-      capTop.geometry.dispose();
-      capBottom.geometry.dispose();
+      capsuleGeometry.dispose();
       glassMaterial.dispose();
       backgroundPlane.geometry.dispose();
       backgroundPlane.material.dispose();
