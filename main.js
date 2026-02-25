@@ -1,4 +1,4 @@
-import { createLiquidGlass } from "../src/index.js";
+import { createLiquidGlass } from "./src/index.js";
 
 const container = document.getElementById("glass");
 
