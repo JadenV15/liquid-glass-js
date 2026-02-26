@@ -151,6 +151,9 @@ export function createLiquidGlass(container, options = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.25;
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
+  renderer.domElement.style.display = "block";
 
   container.appendChild(renderer.domElement);
 
@@ -248,7 +251,7 @@ export function createLiquidGlass(container, options = {}) {
 
     if (!width || !height) return;
 
-    renderer.setSize(width, height, false);
+    renderer.setSize(width, height, true);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     updateCapsuleGeometry();
