@@ -6,8 +6,9 @@ const DEFAULT_OPTIONS = {
   bgColor: "#0e0f12",
   bgOpacity: 1,
   capsule: {
-    radius: 0.13,
-    height: 0.9,
+    width: null,
+    height: null,
+    ratio: 3.4,
     capSegments: 16,
     radialSegments: 64,
   },
@@ -98,6 +99,44 @@ function normalizeCapsuleOptions(config) {
   return { ...config, capsule: { ...DEFAULT_OPTIONS.capsule } };
 }
 
+function toPositiveNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function resolveCapsuleDimensions(capsuleConfig, camera) {
+  const ratio = toPositiveNumber(capsuleConfig.ratio) ?? DEFAULT_OPTIONS.capsule.ratio;
+
+  let width = toPositiveNumber(capsuleConfig.width);
+  const height = toPositiveNumber(capsuleConfig.height);
+
+  if (!width) {
+    const radius = toPositiveNumber(capsuleConfig.radius);
+    if (radius) width = radius * 2;
+  }
+
+  if (width && height) return { width, height };
+  if (width) return { width, height: width * ratio };
+  if (height) return { width: height / ratio, height };
+
+  const distanceToCapsule = Math.max(0.001, camera.position.z);
+  const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+  const viewportHeight = 2 * Math.tan(verticalFov / 2) * distanceToCapsule;
+  const viewportWidth = viewportHeight * camera.aspect;
+
+  const maxAutoHeight = viewportHeight * 0.72;
+  const maxAutoWidth = viewportWidth * 0.42;
+
+  let autoHeight = maxAutoHeight;
+  let autoWidth = autoHeight / ratio;
+
+  if (autoWidth > maxAutoWidth) {
+    autoWidth = maxAutoWidth;
+    autoHeight = autoWidth * ratio;
+  }
+
+  return { width: autoWidth, height: autoHeight };
+}
+
 export function createLiquidGlass(container, options = {}) {
   if (!(container instanceof HTMLElement)) {
     throw new Error("createLiquidGlass(container, options): container must be an HTMLElement.");
@@ -155,18 +194,14 @@ export function createLiquidGlass(container, options = {}) {
     attenuationDistance: config.material.attenuationDistance,
   });
 
-  const capsuleRadius = Math.max(0.001, config.capsule.radius);
-  const capsuleHeight = Math.max(capsuleRadius * 2.01, config.capsule.height);
-  const capsuleLength = Math.max(0.001, capsuleHeight - capsuleRadius * 2);
-
-  const capsuleGeometry = new THREE.CapsuleGeometry(
-    capsuleRadius,
-    capsuleLength,
+  let capsuleGeometry = new THREE.CapsuleGeometry(
+    0.08,
+    0.2,
     config.capsule.capSegments,
     config.capsule.radialSegments
   );
-
   const capsule = new THREE.Mesh(capsuleGeometry, glassMaterial);
+  capsule.position.set(0, 0, 0);
   scene.add(capsule);
 
   let bgTexture = null;
@@ -189,6 +224,24 @@ export function createLiquidGlass(container, options = {}) {
     backgroundPlane.material.needsUpdate = true;
   }
 
+  function updateCapsuleGeometry() {
+    const { width, height } = resolveCapsuleDimensions(config.capsule, camera);
+    const capsuleRadius = Math.max(0.001, width / 2);
+    const capsuleHeight = Math.max(capsuleRadius * 2.01, height);
+    const capsuleLength = Math.max(0.001, capsuleHeight - capsuleRadius * 2);
+
+    const nextGeometry = new THREE.CapsuleGeometry(
+      capsuleRadius,
+      capsuleLength,
+      config.capsule.capSegments,
+      config.capsule.radialSegments
+    );
+
+    capsule.geometry.dispose();
+    capsule.geometry = nextGeometry;
+    capsuleGeometry = nextGeometry;
+  }
+
   function resize() {
     const width = container.clientWidth;
     const height = container.clientHeight;
@@ -198,6 +251,7 @@ export function createLiquidGlass(container, options = {}) {
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    updateCapsuleGeometry();
     render();
   }
 

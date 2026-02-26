@@ -19,8 +19,9 @@ const container = document.getElementById("glass");
 
 const instance = createLiquidGlass(container, {
   capsule: {
-    radius: 0.12,
-    height: 0.72,
+    width: 0.22,
+    // height: 0.78,
+    ratio: 3.5,
     capSegments: 18,
     radialSegments: 64,
   },
@@ -58,11 +59,23 @@ Returns:
 - `dpr: [min, max] | number`
 - `bgColor: string`
 - `bgOpacity: number`
-- `capsule`: geometry values (`radius`, `height`, `capSegments`, `radialSegments`)
+- `capsule`:
+  - `width?: number`
+  - `height?: number`
+  - `ratio?: number` (defaults to `3.4`, used when one or both dimensions are omitted)
+  - `radius?: number` (optional alias for `width / 2`)
+  - `capSegments?: number`
+  - `radialSegments?: number`
 - `material`: physical glass material values (`transmission`, `ior`, `thickness`, `reflectivity`, ...)
 - `background`:
   - `{ type: "gradient" }` (default)
   - `{ type: "image", imageUrl: string }`
+
+Capsule sizing behavior:
+
+- if both `width` and `height` are provided, those exact values are used
+- if only one dimension is provided, the other is derived from `ratio`
+- if neither is provided, the capsule is centered and auto-sized from the container's width/height
 
 ## Local demo
 

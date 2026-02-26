@@ -4,8 +4,8 @@ const container = document.getElementById("glass");
 
 const tube = createLiquidGlass(container, {
   capsule: {
-    radius: 0.16,
-    height: 1.1,
+    width: 0.24,
+    ratio: 3.6,
     radialSegments: 64,
   },
   material: {
