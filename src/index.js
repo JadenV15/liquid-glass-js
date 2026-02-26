@@ -95,25 +95,7 @@ function toPixelRatio(value) {
 
 function normalizeCapsuleOptions(config) {
   if (config.capsule) return config;
-
-  // Backward compatibility with earlier cylinder option shape.
-  if (config.cylinder) {
-    const radius = config.cylinder.radiusTop ?? config.cylinder.radiusBottom ?? 0.13;
-    return {
-      ...config,
-      capsule: {
-        ...DEFAULT_OPTIONS.capsule,
-        radius,
-        height: config.cylinder.height ?? DEFAULT_OPTIONS.capsule.height,
-        radialSegments: config.cylinder.radialSegments ?? DEFAULT_OPTIONS.capsule.radialSegments,
-      },
-    };
-  }
-
-  return {
-    ...config,
-    capsule: { ...DEFAULT_OPTIONS.capsule },
-  };
+  return { ...config, capsule: { ...DEFAULT_OPTIONS.capsule } };
 }
 
 export function createLiquidGlass(container, options = {}) {

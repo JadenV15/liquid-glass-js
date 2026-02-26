@@ -3,10 +3,10 @@ import { createLiquidGlass } from "./src/index.js";
 const container = document.getElementById("glass");
 
 const tube = createLiquidGlass(container, {
-  cylinder: {
-    radiusTop: 0.16,
-    radiusBottom: 0.16,
+  capsule: {
+    radius: 0.16,
     height: 1.1,
+    radialSegments: 64,
   },
   material: {
     transmission: 1,

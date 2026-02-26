@@ -1,6 +1,6 @@
 # liquid-glass-js
 
-A tiny JavaScript library that mounts a **static liquid-glass cylinder** inside any `<div>` container.
+A tiny JavaScript library that mounts a **static liquid-glass capsule** inside any `<div>` container.
 
 This is intentionally focused on the core glass effect (no pointer/mouse animations).
 
@@ -63,8 +63,6 @@ Returns:
 - `background`:
   - `{ type: "gradient" }` (default)
   - `{ type: "image", imageUrl: string }`
-
-`cylinder` options from older versions are still accepted for backward compatibility.
 
 ## Local demo
 
