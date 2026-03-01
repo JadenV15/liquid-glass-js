@@ -1,16 +1,34 @@
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
 const DEFAULT_OPTIONS = {
   dpr: [1, 2],
   bgColor: "#0e0f12",
   bgOpacity: 1,
-  capsule: {
+  shape: {
     width: null,
     height: null,
     ratio: 3.4,
+    radius: null,
+    depth: null,
+    borderRadius: 0,
+    borderRadiusSegments: 4,
+    segments: 64,
     capSegments: 16,
     radialSegments: 64,
+    diameter: null,
+    majorDiameter: null,
+    minorDiameter: null,
+    rotationXDeg: 0,
+    rotationYDeg: 0,
+    rotationZDeg: 0,
+    translateX: 0,
+    translateY: 0,
+    translateZ: 0,
+    dilationX: 1,
+    dilationY: 1,
+    dilationZ: 1,
   },
   material: {
     color: "#ffffff",
@@ -42,7 +60,8 @@ function deepMerge(base, override) {
       value &&
       typeof value === "object" &&
       !Array.isArray(value) &&
-      typeof base[key] === "object"
+      typeof base[key] === "object" &&
+      base[key] !== null
     ) {
       output[key] = deepMerge(base[key], value);
     } else {
@@ -62,12 +81,10 @@ function makeGradientTexture() {
   grad.addColorStop(0, "#2a2f57");
   grad.addColorStop(0.45, "#873c7f");
   grad.addColorStop(1, "#1f6f72");
-
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const noiseCount = 220;
-  for (let i = 0; i < noiseCount; i += 1) {
+  for (let i = 0; i < 220; i += 1) {
     const x = Math.random() * canvas.width;
     const y = Math.random() * canvas.height;
     const r = Math.random() * 36 + 10;
@@ -82,7 +99,6 @@ function makeGradientTexture() {
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
-
   return texture;
 }
 
@@ -94,23 +110,36 @@ function toPixelRatio(value) {
   return value;
 }
 
-function normalizeCapsuleOptions(config) {
-  if (config.capsule) return config;
-  return { ...config, capsule: { ...DEFAULT_OPTIONS.capsule } };
-}
-
 function toPositiveNumber(value) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function resolveCapsuleDimensions(capsuleConfig, camera) {
-  const ratio = toPositiveNumber(capsuleConfig.ratio) ?? DEFAULT_OPTIONS.capsule.ratio;
+function toFiniteNumber(value, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
 
-  let width = toPositiveNumber(capsuleConfig.width);
-  const height = toPositiveNumber(capsuleConfig.height);
+function toScaleNumber(value, fallback = 1) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function normalizeOptions(options) {
+  const merged = deepMerge(DEFAULT_OPTIONS, options);
+  return merged.shape ? merged : { ...merged, shape: { ...DEFAULT_OPTIONS.shape } };
+}
+
+function cloneOptions(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function resolveAutoDimensions(shapeConfig, camera) {
+  const ratio = toPositiveNumber(shapeConfig.ratio) ?? DEFAULT_OPTIONS.shape.ratio;
+
+  let width = toPositiveNumber(shapeConfig.width);
+  const height = toPositiveNumber(shapeConfig.height);
 
   if (!width) {
-    const radius = toPositiveNumber(capsuleConfig.radius);
+    const radius = toPositiveNumber(shapeConfig.radius);
     if (radius) width = radius * 2;
   }
 
@@ -118,9 +147,9 @@ function resolveCapsuleDimensions(capsuleConfig, camera) {
   if (width) return { width, height: width * ratio };
   if (height) return { width: height / ratio, height };
 
-  const distanceToCapsule = Math.max(0.001, camera.position.z);
+  const distance = Math.max(0.001, camera.position.z);
   const verticalFov = THREE.MathUtils.degToRad(camera.fov);
-  const viewportHeight = 2 * Math.tan(verticalFov / 2) * distanceToCapsule;
+  const viewportHeight = 2 * Math.tan(verticalFov / 2) * distance;
   const viewportWidth = viewportHeight * camera.aspect;
 
   const maxAutoHeight = viewportHeight * 0.72;
@@ -137,15 +166,104 @@ function resolveCapsuleDimensions(capsuleConfig, camera) {
   return { width: autoWidth, height: autoHeight };
 }
 
-export function createLiquidGlass(container, options = {}) {
-  if (!(container instanceof HTMLElement)) {
-    throw new Error("createLiquidGlass(container, options): container must be an HTMLElement.");
+function resolveEllipseDimensions(shapeConfig, camera, fnName) {
+  const diameter = toPositiveNumber(shapeConfig.diameter);
+  const majorDiameter = toPositiveNumber(shapeConfig.majorDiameter);
+  const minorDiameter = toPositiveNumber(shapeConfig.minorDiameter);
+
+  if (diameter) return { width: diameter, height: diameter };
+
+  if (majorDiameter || minorDiameter) {
+    if (!majorDiameter || !minorDiameter) {
+      throw new Error(`${fnName}: shape.majorDiameter and shape.minorDiameter must both be provided.`);
+    }
+    return { width: majorDiameter, height: minorDiameter };
   }
 
-  const merged = deepMerge(DEFAULT_OPTIONS, options);
-  const config = normalizeCapsuleOptions(merged);
+  return resolveAutoDimensions(shapeConfig, camera);
+}
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+function resolveDimensions(kind, shapeConfig, camera, fnName) {
+  if (kind === "ellipse") {
+    return resolveEllipseDimensions(shapeConfig, camera, fnName);
+  }
+  return resolveAutoDimensions(shapeConfig, camera);
+}
+
+function validateCapsuleDimensions(width, height, fnName) {
+  if (height < width) {
+    throw new Error(
+      `${fnName}: invalid dimensions. Capsule height includes both end caps and must be >= width (diameter).`
+    );
+  }
+}
+
+function createGeometry(kind, shapeConfig, dimensions, fnName) {
+  const width = Math.max(0.001, dimensions.width);
+  const height = Math.max(0.001, dimensions.height);
+
+  if (kind === "capsule") {
+    validateCapsuleDimensions(width, height, fnName);
+    const radius = Math.max(0.001, width / 2);
+    const length = Math.max(0.001, height - radius * 2);
+    return new THREE.CapsuleGeometry(radius, length, shapeConfig.capSegments, shapeConfig.radialSegments);
+  }
+
+  if (kind === "rect") {
+    const depth = toPositiveNumber(shapeConfig.depth) ?? Math.max(0.001, Math.min(width, height) * 0.34);
+    const radiusRaw = toPositiveNumber(shapeConfig.borderRadius) ?? 0;
+    const radius = Math.min(radiusRaw, width / 2, height / 2, depth / 2);
+    const segments = Math.max(1, Math.round(toPositiveNumber(shapeConfig.borderRadiusSegments) ?? 4));
+    if (radius > 0) {
+      return new RoundedBoxGeometry(width, height, depth, segments, radius);
+    }
+    return new THREE.BoxGeometry(width, height, depth);
+  }
+
+  const radius = 0.5;
+  const segments = Math.max(8, Math.round(toPositiveNumber(shapeConfig.segments) ?? 64));
+  const rings = Math.max(6, Math.round(segments * 0.75));
+  return new THREE.SphereGeometry(radius, segments, rings);
+}
+
+function applyShapeScale(kind, mesh, dimensions, shapeConfig) {
+  const sx = toScaleNumber(shapeConfig.dilationX, 1);
+  const sy = toScaleNumber(shapeConfig.dilationY, 1);
+  const sz = toScaleNumber(shapeConfig.dilationZ, 1);
+
+  if (kind === "ellipse") {
+    const ex = Math.max(0.001, dimensions.width);
+    const ey = Math.max(0.001, dimensions.height);
+    mesh.scale.set(ex * sx, ey * sy, ex * sz);
+    return;
+  }
+  mesh.scale.set(sx, sy, sz);
+}
+
+function applyShapeRotation(mesh, shapeConfig) {
+  const x = THREE.MathUtils.degToRad(toFiniteNumber(shapeConfig.rotationXDeg, 0));
+  const y = THREE.MathUtils.degToRad(toFiniteNumber(shapeConfig.rotationYDeg, 0));
+  const z = THREE.MathUtils.degToRad(toFiniteNumber(shapeConfig.rotationZDeg, 0));
+  mesh.rotation.set(x, y, z);
+  mesh.position.set(
+    toFiniteNumber(shapeConfig.translateX, 0),
+    toFiniteNumber(shapeConfig.translateY, 0),
+    toFiniteNumber(shapeConfig.translateZ, 0)
+  );
+}
+
+function drawLiquidShape(container, options = {}, kind, fnName) {
+  if (!(container instanceof HTMLElement)) {
+    throw new Error(`${fnName}(container, options): container must be an HTMLElement.`);
+  }
+
+  let config = normalizeOptions(options);
+
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: "high-performance",
+  });
   renderer.setPixelRatio(toPixelRatio(config.dpr));
   renderer.setClearColor(config.bgColor, config.bgOpacity);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -154,7 +272,6 @@ export function createLiquidGlass(container, options = {}) {
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "100%";
   renderer.domElement.style.display = "block";
-
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -197,17 +314,39 @@ export function createLiquidGlass(container, options = {}) {
     attenuationDistance: config.material.attenuationDistance,
   });
 
-  let capsuleGeometry = new THREE.CapsuleGeometry(
-    0.08,
-    0.2,
-    config.capsule.capSegments,
-    config.capsule.radialSegments
-  );
-  const capsule = new THREE.Mesh(capsuleGeometry, glassMaterial);
-  capsule.position.set(0, 0, 0);
-  scene.add(capsule);
+  let shapeGeometry = createGeometry(kind, config.shape, { width: 0.1, height: 0.1 }, fnName);
+  const shapeMesh = new THREE.Mesh(shapeGeometry, glassMaterial);
+  scene.add(shapeMesh);
+  let currentDimensions = { width: 0.1, height: 0.1 };
 
   let bgTexture = null;
+
+  function applyRendererConfig() {
+    renderer.setPixelRatio(toPixelRatio(config.dpr));
+    renderer.setClearColor(config.bgColor, config.bgOpacity);
+  }
+
+  function applyMaterialConfig() {
+    glassMaterial.color.set(config.material.color);
+    glassMaterial.roughness = config.material.roughness;
+    glassMaterial.metalness = config.material.metalness;
+    glassMaterial.transmission = config.material.transmission;
+    glassMaterial.ior = config.material.ior;
+    glassMaterial.thickness = config.material.thickness;
+    glassMaterial.reflectivity = config.material.reflectivity;
+    glassMaterial.clearcoat = config.material.clearcoat;
+    glassMaterial.clearcoatRoughness = config.material.clearcoatRoughness;
+    glassMaterial.iridescence = config.material.iridescence;
+    glassMaterial.iridescenceIOR = config.material.iridescenceIOR;
+    glassMaterial.iridescenceThicknessRange = config.material.iridescenceThicknessRange;
+    glassMaterial.attenuationColor = new THREE.Color(config.material.attenuationColor);
+    glassMaterial.attenuationDistance = config.material.attenuationDistance;
+    glassMaterial.needsUpdate = true;
+  }
+
+  function render() {
+    renderer.render(scene, camera);
+  }
 
   function applyBackgroundTexture() {
     if (bgTexture) bgTexture.dispose();
@@ -227,41 +366,50 @@ export function createLiquidGlass(container, options = {}) {
     backgroundPlane.material.needsUpdate = true;
   }
 
-  function updateCapsuleGeometry() {
-    const { width, height } = resolveCapsuleDimensions(config.capsule, camera);
-    const capsuleRadius = Math.max(0.001, width / 2);
-    const capsuleHeight = Math.max(capsuleRadius * 2.01, height);
-    const capsuleLength = Math.max(0.001, capsuleHeight - capsuleRadius * 2);
+  function updateShapeGeometry() {
+    const dimensions = resolveDimensions(kind, config.shape, camera, fnName);
+    currentDimensions = dimensions;
+    const nextGeometry = createGeometry(kind, config.shape, dimensions, fnName);
+    shapeMesh.geometry.dispose();
+    shapeMesh.geometry = nextGeometry;
+    shapeGeometry = nextGeometry;
+    applyShapeScale(kind, shapeMesh, dimensions, config.shape);
+    applyShapeRotation(shapeMesh, config.shape);
+  }
 
-    const nextGeometry = new THREE.CapsuleGeometry(
-      capsuleRadius,
-      capsuleLength,
-      config.capsule.capSegments,
-      config.capsule.radialSegments
-    );
-
-    capsule.geometry.dispose();
-    capsule.geometry = nextGeometry;
-    capsuleGeometry = nextGeometry;
+  function setShapeTransform(nextShape = {}) {
+    config.shape = deepMerge(config.shape, nextShape);
+    applyShapeScale(kind, shapeMesh, currentDimensions, config.shape);
+    applyShapeRotation(shapeMesh, config.shape);
+    render();
   }
 
   function resize() {
     const width = container.clientWidth;
     const height = container.clientHeight;
-
     if (!width || !height) return;
 
     renderer.setSize(width, height, true);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    updateCapsuleGeometry();
+    updateShapeGeometry();
     render();
   }
 
-  function render() {
-    renderer.render(scene, camera);
+  function update(nextOptions = {}) {
+    config = normalizeOptions(deepMerge(config, nextOptions));
+    applyRendererConfig();
+    applyMaterialConfig();
+    applyBackgroundTexture();
+    resize();
   }
 
+  function getOptions() {
+    return cloneOptions(config);
+  }
+
+  applyRendererConfig();
+  applyMaterialConfig();
   applyBackgroundTexture();
   resize();
 
@@ -271,15 +419,17 @@ export function createLiquidGlass(container, options = {}) {
   return {
     render,
     resize,
+    update,
+    setShapeTransform,
+    getOptions,
     destroy() {
       resizeObserver.disconnect();
 
       if (bgTexture) bgTexture.dispose();
-      capsuleGeometry.dispose();
+      shapeGeometry.dispose();
       glassMaterial.dispose();
       backgroundPlane.geometry.dispose();
       backgroundPlane.material.dispose();
-
       pmrem.dispose();
       renderer.dispose();
 
@@ -290,4 +440,16 @@ export function createLiquidGlass(container, options = {}) {
   };
 }
 
-export default createLiquidGlass;
+export function drawLiquidCapsule(container, options = {}) {
+  return drawLiquidShape(container, options, "capsule", "drawLiquidCapsule");
+}
+
+export function drawLiquidRect(container, options = {}) {
+  return drawLiquidShape(container, options, "rect", "drawLiquidRect");
+}
+
+export function drawLiquidEllipse(container, options = {}) {
+  return drawLiquidShape(container, options, "ellipse", "drawLiquidEllipse");
+}
+
+export default drawLiquidCapsule;

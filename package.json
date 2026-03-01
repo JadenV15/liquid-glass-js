@@ -10,7 +10,7 @@
   },
   "scripts": {
     "check": "node --check src/index.js",
-    "demo": "python3 -m http.server 4173"
+    "demo": "python -m http.server --bind localhost"
   },
   "keywords": [
     "threejs",
