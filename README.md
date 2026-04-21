@@ -6,9 +6,8 @@
 
 - Three drawing APIs with shared lifecycle controls
 - Automatic resize handling via `ResizeObserver`
-- Physical glass material controls
-- Gradient or image background support
-- ESM-ready
+- Glass material controls
+- Gradient / image background support
 
 ## Install
 
@@ -56,9 +55,9 @@ Make sure each target container has explicit dimensions.
 
 ## API
 
-### `drawLiquidCapsule(container, options?)`
-### `drawLiquidRect(container, options?)`
-### `drawLiquidEllipse(container, options?)`
+**`drawLiquidCapsule(container, options?)`**\
+**`drawLiquidRect(container, options?)`**\
+**`drawLiquidEllipse(container, options?)`**
 
 Each function mounts a WebGL canvas into `container` and returns:
 
@@ -68,7 +67,7 @@ Each function mounts a WebGL canvas into `container` and returns:
 - `getOptions(): object`
 - `destroy(): void`
 
-Throws if `container` is not an `HTMLElement`.
+Throws if `container` is not a `HTMLElement`.
 
 ## Options
 
@@ -165,10 +164,6 @@ npm install
 npm run demo
 ```
 
-Open the URL printed by your server.
-
 ## Credits
 
-Inspired by and based on ideas from:
-
-- [ektogamat/apple-liquid-glass](https://github.com/ektogamat/apple-liquid-glass)
+Based on [ektogamat/apple-liquid-glass](https://github.com/ektogamat/apple-liquid-glass)
